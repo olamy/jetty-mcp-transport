@@ -34,7 +34,7 @@
   </scm>
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
-    <jetty.version>12.0.25</jetty.version>
+    <jetty.version>12.1.0</jetty.version>
     <junit.version>5.13.4</junit.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <njord.autoPublish>true</njord.autoPublish>
