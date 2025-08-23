@@ -64,6 +64,10 @@ import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
 
 /**
+ *
+ * Copyright 2025-2025 the original author or authors.
+ *
+ *
  * An implementation of the Streamable HTTP protocol as defined by the
  * <code>2025-03-26</code> version of the MCP specification.
  *
