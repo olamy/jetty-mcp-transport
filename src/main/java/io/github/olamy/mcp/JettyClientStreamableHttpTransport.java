@@ -76,7 +76,7 @@ import reactor.util.function.Tuples;
  */
 public class JettyClientStreamableHttpTransport implements McpClientTransport {
 
-    private static final String MISSING_SESSION_ID = "[missing_session_id]";
+    private static final String NO_SESSION_ID = "[no_session_id]";
 
     private static final Logger logger = LoggerFactory.getLogger(JettyClientStreamableHttpTransport.class);
 
@@ -84,9 +84,6 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
 
     private static final String DEFAULT_ENDPOINT = "/mcp";
 
-    /**
-     * Event type for JSON-RPC messages received through the SSE connection.
-     */
     private static final String MESSAGE_EVENT_TYPE = "message";
 
     private final ObjectMapper objectMapper;
@@ -162,7 +159,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                     .headers(httpFields -> httpFields
                             .add(HttpHeaders.MCP_SESSION_ID, sessionId)
                             .add(HttpHeaders.PROTOCOL_VERSION, MCP_PROTOCOL_VERSION))
-                    .onRequestFailure((request1, e) -> logger.warn("Got error when closing transport", e));
+                    .onRequestFailure((request1, e) -> logger.warn("error when creating transport session", e));
             return Mono.from(ReactiveRequest.newBuilder(request)
                             .abortOnCancel(true)
                             .build()
@@ -199,7 +196,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
     @Override
     public Mono<Void> closeGracefully() {
         return Mono.defer(() -> {
-            logger.debug("Graceful close triggered");
+            logger.debug("closeGracefully triggered");
             DefaultMcpTransportSession currentSession = this.activeSession.getAndSet(createTransportSession());
             if (currentSession != null) {
                 return currentSession.closeGracefully();
@@ -250,7 +247,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                         String sessionIdRepresentation = sessionIdOrPlaceholder(transportSession);
                                         return mcpSessionNotFoundError(sessionIdRepresentation);
                                     } else {
-                                        return this.extractError(chunkPublisher, MISSING_SESSION_ID, reactiveResponse);
+                                        return this.extractError(chunkPublisher, NO_SESSION_ID, reactiveResponse);
                                     }
                                 } else {
                                     return Flux.error(new Exception());
@@ -357,8 +354,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                         }
                                     }
                                 } else {
-                                    if (isNotFound(reactiveResponse)
-                                            && !sessionRepresentation.equals(MISSING_SESSION_ID)) {
+                                    if (isNotFound(reactiveResponse) && !sessionRepresentation.equals(NO_SESSION_ID)) {
                                         return mcpSessionNotFoundError(sessionRepresentation);
                                     }
                                     return this.extractError(chunkPublisher, sessionRepresentation, reactiveResponse);
@@ -385,7 +381,6 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
 
     private static Flux<McpSchema.JSONRPCMessage> mcpSessionNotFoundError(String sessionRepresentation) {
         logger.warn("Session {} was not found on the MCP server", sessionRepresentation);
-        // inform the stream/connection subscriber
         return Flux.error(new McpTransportSessionNotFoundException(sessionRepresentation));
     }
 
@@ -431,7 +426,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                 ? new McpError(jsonRpcError)
                                 : new McpTransportException("Can't parse the jsonResponse " + jsonRpcResponse);
                         if (response.getStatus() == 400) {
-                            if (!sessionRepresentation.equals(MISSING_SESSION_ID)) {
+                            if (!sessionRepresentation.equals(NO_SESSION_ID)) {
                                 return Mono.error(
                                         new McpTransportSessionNotFoundException(sessionRepresentation, toPropagate));
                             }
@@ -498,7 +493,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
     }
 
     private static String sessionIdOrPlaceholder(McpTransportSession<?> transportSession) {
-        return transportSession.sessionId().orElse(MISSING_SESSION_ID);
+        return transportSession.sessionId().orElse(NO_SESSION_ID);
     }
 
     @Override
