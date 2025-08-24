@@ -37,6 +37,7 @@ import com.github.victools.jsonschema.module.jackson.JacksonModule;
 import com.github.victools.jsonschema.module.jackson.JacksonOption;
 import com.github.victools.jsonschema.module.swagger2.Swagger2Module;
 import io.modelcontextprotocol.client.McpAsyncClient;
+import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpTransportContext;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
@@ -215,12 +216,10 @@ public class JettyClientStreamableHttpTransportTest {
     }
 
     McpAsyncClient getMcpAsyncClient(McpClientTransport transport) {
-        return io.modelcontextprotocol.client.McpClient.async(transport)
+        return McpClient.async(transport)
                 .initializationTimeout(Duration.ofMinutes(10))
                 .requestTimeout(Duration.ofMinutes(10))
-                .capabilities(io.modelcontextprotocol.spec.McpSchema.ClientCapabilities.builder()
-                        .roots(true)
-                        .build())
+                .capabilities(McpSchema.ClientCapabilities.builder().roots(true).build())
                 .build();
     }
 

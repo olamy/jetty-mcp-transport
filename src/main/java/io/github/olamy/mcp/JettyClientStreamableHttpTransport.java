@@ -66,8 +66,7 @@ import reactor.util.function.Tuples;
 /**
  *
  * Copyright 2025-2025 the original author or authors.
- *
- *
+ * This class is not thread safe only one instance should be used per mcp client.
  * An implementation of the Streamable HTTP protocol as defined by the
  * <code>2025-03-26</code> version of the MCP specification.
  *
@@ -119,6 +118,9 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
         this.resumableStreams = resumableStreams;
         this.openConnectionOnStartup = openConnectionOnStartup;
         this.activeSession.set(createTransportSession());
+        if (!this.httpClient.isStarted()) {
+            throw new IllegalStateException("HttpClient is not started");
+        }
     }
 
     @Override
@@ -584,7 +586,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
         }
 
         /**
-         * @param httpClient instance to use
+         * @param httpClient instance to use the http client to use must  have been started
          * @return the builder instance
          */
         public Builder httpClient(HttpClient httpClient) {
