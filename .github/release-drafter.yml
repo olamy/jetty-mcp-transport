@@ -1,6 +1,6 @@
 # Configuration for Release Drafter: https://github.com/toolmantim/release-drafter
 name-template: $NEXT_PATCH_VERSION
-tag-template: $NEXT_PATCH_VERSION
+tag-template: jetty-mcp-transport-$NEXT_PATCH_VERSION
 version-template: $MAJOR.$MINOR.$PATCH
 
 # Emoji reference: https://gitmoji.carloscuesta.me/
