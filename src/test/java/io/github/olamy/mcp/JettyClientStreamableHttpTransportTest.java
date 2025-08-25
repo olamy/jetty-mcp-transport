@@ -225,6 +225,22 @@ public class JettyClientStreamableHttpTransportTest {
 
     McpClientTransport getMcpClientTransport() {
         return JettyClientStreamableHttpTransport.builder(httpClient)
+                .requestCustomiser((body, request) -> {
+                    try {
+                        McpSchema.JSONRPCMessage jsonrpcMessage =
+                                McpSchema.deserializeJsonRpcMessage(OBJECT_MAPPER, body);
+                        if (jsonrpcMessage instanceof McpSchema.JSONRPCRequest jsonrpcRequest
+                                && jsonrpcRequest.params() instanceof Map params) {
+                            Optional<Map<String, Object>> meta = Optional.ofNullable((Map) params.get("_meta"));
+                            Optional<String> authz = Optional.ofNullable(
+                                    (String) meta.orElse(Collections.emptyMap()).get("Authorization"));
+                            authz.ifPresent(s -> request.headers(httpFields -> httpFields.add("Authorization", s)));
+                        }
+                        return () -> body;
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                })
                 .endpoint(url)
                 .build();
     }
@@ -234,10 +250,11 @@ public class JettyClientStreamableHttpTransportTest {
 
         LOGGER.info("start simpleMCPCallTest");
 
-        httpClient
-                .getRequestListeners()
-                .addBeginListener(event ->
-                        event.headers(httpFields -> httpFields.add("Authorization", "really complicated password")));
+        //        httpClient
+        //                .getRequestListeners()
+        //                .addBeginListener(event ->
+        //                        event.headers(httpFields -> httpFields.add("Authorization", "really complicated
+        // password")));
 
         McpClientTransport transport = getMcpClientTransport();
 

@@ -103,17 +103,21 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
 
     private final AtomicReference<Consumer<Throwable>> exceptionHandler = new AtomicReference<>();
 
+    private final RequestCustomiser requestCustomiser;
+
     private JettyClientStreamableHttpTransport(
             ObjectMapper objectMapper,
             HttpClient httpClient,
             String endpoint,
             boolean resumableStreams,
-            boolean openConnectionOnStartup) {
+            boolean openConnectionOnStartup,
+            RequestCustomiser requestCustomiser) {
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
         this.endpoint = endpoint;
         this.resumableStreams = resumableStreams;
         this.openConnectionOnStartup = openConnectionOnStartup;
+        this.requestCustomiser = requestCustomiser;
         this.activeSession.set(createTransportSession());
         if (!this.httpClient.isStarted()) {
             throw new IllegalStateException("HttpClient is not started");
@@ -284,6 +288,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
 
             Request request;
             try {
+                String body = objectMapper.writeValueAsString(message);
                 request = httpClient
                         .newRequest(this.endpoint)
                         .method(HttpMethod.POST)
@@ -294,8 +299,10 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                     .sessionId()
                                     .ifPresent(id -> httpFields.add(HttpHeaders.MCP_SESSION_ID, id));
                         })
-                        .body(new StringRequestContent(objectMapper.writeValueAsString(message)))
+                        .body(new StringRequestContent(body))
                         .onRequestFailure((request1, e) -> logger.warn("Got error when sending message", e));
+                request.body(new StringRequestContent(
+                        requestCustomiser.customiseBody(body, request).get()));
             } catch (JsonProcessingException e) {
                 sink.error(new RuntimeException(e));
                 return;
@@ -565,6 +572,8 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
 
         private boolean openConnectionOnStartup = false;
 
+        private RequestCustomiser requestCustomiser = RequestCustomiser.NOOP;
+
         private Builder(HttpClient httpClient) {
             this.httpClient = Objects.requireNonNull(httpClient, "httpClient must not be null");
         }
@@ -628,6 +637,18 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
         }
 
         /**
+         * Configure a customizer to modify the request body before sending it to the
+         * server.
+         * @param requestCustomiser the customizer to use, must not be {@code null}.
+         * By default, no customization is applied.
+         * @return the builder instance
+         */
+        public Builder requestCustomiser(RequestCustomiser requestCustomiser) {
+            this.requestCustomiser = requestCustomiser;
+            return this;
+        }
+
+        /**
          * Construct a fresh instance of {@link JettyClientStreamableHttpTransport} using
          * the current builder configuration.
          * @return a new instance of {@link JettyClientStreamableHttpTransport}
@@ -636,7 +657,12 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
             ObjectMapper objectMapper = this.objectMapper != null ? this.objectMapper : new ObjectMapper();
 
             return new JettyClientStreamableHttpTransport(
-                    objectMapper, this.httpClient, endpoint, resumableStreams, openConnectionOnStartup);
+                    objectMapper,
+                    this.httpClient,
+                    endpoint,
+                    resumableStreams,
+                    openConnectionOnStartup,
+                    requestCustomiser);
         }
     }
 }
