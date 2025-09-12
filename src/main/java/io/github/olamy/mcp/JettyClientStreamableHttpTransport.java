@@ -22,6 +22,7 @@ package io.github.olamy.mcp;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.spec.DefaultMcpTransportSession;
 import io.modelcontextprotocol.spec.DefaultMcpTransportStream;
 import io.modelcontextprotocol.spec.HttpHeaders;
@@ -45,6 +46,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.StringRequestContent;
@@ -424,21 +426,26 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                     byte[] bytes = new byte[buf.remaining()];
                     buf.get(bytes);
                     Exception toPropagate;
+                    int status = response.getStatus();
                     try {
                         String responseMessage = new String(bytes);
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("extractError, status {} responseMessage: {}", status, responseMessage);
+                        }
                         McpSchema.JSONRPCResponse jsonRpcResponse =
                                 objectMapper.readValue(responseMessage, McpSchema.JSONRPCResponse.class);
                         McpSchema.JSONRPCResponse.JSONRPCError jsonRpcError = jsonRpcResponse.error();
                         toPropagate = jsonRpcError != null
                                 ? new McpError(jsonRpcError)
-                                : new McpTransportException("Can't parse the jsonResponse " + jsonRpcResponse);
-                        if (response.getStatus() == 400) {
+                                : new McpTransportException("Can't parse the jsonResponse " + jsonRpcResponse
+                                        + ", json:" + responseMessage);
+                        if (status / 100 == 4) {
                             if (!sessionRepresentation.equals(NO_SESSION_ID)) {
                                 return Mono.error(
                                         new McpTransportSessionNotFoundException(sessionRepresentation, toPropagate));
                             }
                             return Mono.error(new McpTransportException(
-                                    "Received 400 BAD REQUEST for session " + sessionRepresentation + ". "
+                                    "Received " + status + " BAD REQUEST for session " + sessionRepresentation + ". "
                                             + toPropagate.getMessage(),
                                     toPropagate));
                         }
@@ -574,6 +581,8 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
 
         private RequestCustomiser requestCustomiser = RequestCustomiser.NOOP;
 
+        private Supplier<McpTransportContext> contextProvider = () -> McpTransportContext.EMPTY;
+
         private Builder(HttpClient httpClient) {
             this.httpClient = Objects.requireNonNull(httpClient, "httpClient must not be null");
         }
@@ -645,6 +654,11 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
          */
         public Builder requestCustomiser(RequestCustomiser requestCustomiser) {
             this.requestCustomiser = requestCustomiser;
+            return this;
+        }
+
+        public Builder transportContextProvider(Supplier<McpTransportContext> contextProvider) {
+            this.contextProvider = contextProvider;
             return this;
         }
 
