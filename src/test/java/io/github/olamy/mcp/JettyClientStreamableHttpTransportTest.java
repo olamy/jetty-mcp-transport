@@ -38,11 +38,13 @@ import com.github.victools.jsonschema.module.jackson.JacksonOption;
 import com.github.victools.jsonschema.module.swagger2.Swagger2Module;
 import io.modelcontextprotocol.client.McpAsyncClient;
 import io.modelcontextprotocol.client.McpClient;
+import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.server.McpServerFeatures;
-import io.modelcontextprotocol.server.McpTransportContext;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
+import io.modelcontextprotocol.spec.McpTransportException;
 import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -57,6 +59,7 @@ import org.eclipse.jetty.ee10.servlet.ServletHolder;
 import org.eclipse.jetty.server.NetworkConnector;
 import org.eclipse.jetty.server.Server;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -99,12 +102,11 @@ public class JettyClientStreamableHttpTransportTest {
         HttpServletStreamableServerTransportProvider provider = HttpServletStreamableServerTransportProvider.builder()
                 .objectMapper(OBJECT_MAPPER)
                 .mcpEndpoint("/mcp")
-                .contextExtractor((serverRequest, transportContext) -> {
-                    var userId = serverRequest.getHeader("Authorization");
-                    if (userId != null) {
-                        transportContext.put("Authorization", userId);
-                    }
-                    return transportContext;
+                .contextExtractor(request -> {
+                    var userId = request.getHeader("Authorization");
+                    return userId != null
+                            ? McpTransportContext.create(Map.of("Authorization", userId))
+                            : McpTransportContext.EMPTY;
                 })
                 .build();
 
@@ -223,7 +225,7 @@ public class JettyClientStreamableHttpTransportTest {
                 .build();
     }
 
-    McpClientTransport getMcpClientTransport() {
+    McpClientTransport getMcpClientTransport(String endpoint) {
         return JettyClientStreamableHttpTransport.builder(httpClient)
                 .requestCustomiser((body, request) -> {
                     try {
@@ -241,8 +243,22 @@ public class JettyClientStreamableHttpTransportTest {
                         throw new RuntimeException(e);
                     }
                 })
-                .endpoint(url)
+                .endpoint(endpoint)
                 .build();
+    }
+
+    McpClientTransport getMcpClientTransport() {
+        return getMcpClientTransport(url);
+    }
+
+    @Test
+    void simpleCall4xx() throws Exception {
+        McpClientTransport transport = getMcpClientTransport(url + "/foo/bar");
+        try (McpSyncClient client = McpClient.sync(transport).build()) {
+            RuntimeException runtimeException = Assertions.assertThrows(RuntimeException.class, client::initialize);
+            assertThat(runtimeException.getCause(), instanceOf(McpTransportException.class));
+            assertThat(runtimeException.getCause().getMessage(), containsString("405"));
+        }
     }
 
     @Test
