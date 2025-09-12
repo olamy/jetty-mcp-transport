@@ -19,6 +19,7 @@
 
 package io.github.olamy.mcp;
 
+import static io.github.olamy.mcp.JettyClientStreamableHttpTransport.HEADERS_CTX_KEY;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -301,10 +302,13 @@ public class JettyClientStreamableHttpTransportTest {
                 McpSchema.CallToolRequest request = McpSchema.CallToolRequest.builder()
                         .name("test_add")
                         .arguments(args)
-                        .meta(Map.of("Authorization", "really complicated password"))
+                        // .meta(Map.of("Authorization", "really complicated password"))
                         .build();
 
-                McpSchema.CallToolResult result = client.callTool(request).block();
+                McpSchema.CallToolResult result = client.callTool(request)
+                        .contextWrite(context ->
+                                context.put(HEADERS_CTX_KEY, Map.of("Authorization", "really complicated password")))
+                        .block();
                 LOGGER.debug("result: {}", result.content());
 
                 assertThat(result.content().size(), is(1));
