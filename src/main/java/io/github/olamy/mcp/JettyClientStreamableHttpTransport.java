@@ -41,6 +41,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -106,6 +107,9 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
     private final AtomicReference<Consumer<Throwable>> exceptionHandler = new AtomicReference<>();
 
     private final RequestCustomiser requestCustomiser;
+
+    public static final String HEADERS_CTX_KEY =
+            JettyClientStreamableHttpTransport.class.getName() + ".HEADERS_CTX_KEY";
 
     private JettyClientStreamableHttpTransport(
             ObjectMapper objectMapper,
@@ -238,6 +242,10 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                     })
                     .onRequestFailure((request1, e) -> logger.warn("Got error when reconnect", e));
 
+            Optional<Map<String, String>> headers = ctx.getOrEmpty(HEADERS_CTX_KEY);
+            headers.ifPresent(stringStringMap ->
+                    stringStringMap.forEach((key, value) -> request.headers(httpFields -> httpFields.add(key, value))));
+
             Disposable connection = Flux.from(ReactiveRequest.newBuilder(request)
                             .abortOnCancel(true)
                             .build()
@@ -303,6 +311,9 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                         })
                         .body(new StringRequestContent(body))
                         .onRequestFailure((request1, e) -> logger.warn("Got error when sending message", e));
+                Optional<Map<String, String>> headers = sink.contextView().getOrEmpty(HEADERS_CTX_KEY);
+                headers.ifPresent(stringStringMap -> stringStringMap.forEach(
+                        (key, value) -> request.headers(httpFields -> httpFields.add(key, value))));
                 request.body(new StringRequestContent(
                         requestCustomiser.customiseBody(body, request).get()));
             } catch (JsonProcessingException e) {
