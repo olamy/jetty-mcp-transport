@@ -304,7 +304,9 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                         .method(HttpMethod.POST)
                         .accept("application/json", "text/event-stream")
                         .headers(httpFields -> {
-                            httpFields.add(HttpHeaders.PROTOCOL_VERSION, MCP_PROTOCOL_VERSION);
+                            httpFields
+                                    .add(HttpHeaders.PROTOCOL_VERSION, MCP_PROTOCOL_VERSION)
+                                    .add(HttpHeader.CONTENT_TYPE, "application/json");
                             transportSession
                                     .sessionId()
                                     .ifPresent(id -> httpFields.add(HttpHeaders.MCP_SESSION_ID, id));
@@ -325,8 +327,11 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                             .abortOnCancel(true)
                             .build()
                             .response((reactiveResponse, chunkPublisher) -> {
-                                if (transportSession.markInitialized(
-                                        reactiveResponse.getHeaders().get(HttpHeaders.MCP_SESSION_ID))) {
+                                String mcpSessionId =
+                                        reactiveResponse.getHeaders().get(HttpHeaders.MCP_SESSION_ID);
+                                if (mcpSessionId != null
+                                        && transportSession.markInitialized(
+                                                reactiveResponse.getHeaders().get(HttpHeaders.MCP_SESSION_ID))) {
                                     // Once we have a session, we try to open an async stream for
                                     // the server to send notifications and requests out-of-band.
                                     reconnect(null)
