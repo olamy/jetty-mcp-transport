@@ -46,6 +46,7 @@ import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTrans
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpTransportException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -94,13 +95,15 @@ public class JettyClientStreamableHttpTransportTest {
         SUBTYPE_SCHEMA_GENERATOR = new SchemaGenerator(subtypeSchemaGeneratorConfig);
     }
 
+    static HttpServletStreamableServerTransportProvider provider;
+
     @BeforeAll
     public static void start() throws Exception {
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         context.setContextPath("/");
         server.setHandler(context);
 
-        HttpServletStreamableServerTransportProvider provider = HttpServletStreamableServerTransportProvider.builder()
+        provider = HttpServletStreamableServerTransportProvider.builder()
                 .objectMapper(OBJECT_MAPPER)
                 .mcpEndpoint("/mcp")
                 .contextExtractor(request -> {
@@ -267,12 +270,6 @@ public class JettyClientStreamableHttpTransportTest {
 
         LOGGER.info("start simpleMCPCallTest");
 
-        //        httpClient
-        //                .getRequestListeners()
-        //                .addBeginListener(event ->
-        //                        event.headers(httpFields -> httpFields.add("Authorization", "really complicated
-        // password")));
-
         McpClientTransport transport = getMcpClientTransport();
 
         // we expect remote tools to be registered
@@ -317,6 +314,114 @@ public class JettyClientStreamableHttpTransportTest {
                 assertThat(content, instanceOf(McpSchema.TextContent.class));
                 McpSchema.TextContent textContent = (McpSchema.TextContent) content;
                 assertThat(textContent.text(), containsString("Result is 3 with really complicated password"));
+            }
+
+        } finally {
+            client.close();
+        }
+    }
+
+    @Test
+    void simpleMCPCallWithClearSessionsTest() throws Exception {
+
+        LOGGER.info("start simpleMCPCallWithClearSessionsTest");
+
+        McpClientTransport transport = getMcpClientTransport();
+
+        // we expect remote tools to be registered
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                // it looks it may takes time for quarkus to finish startup
+                .pollDelay(Duration.ofSeconds(5))
+                .pollInterval(Duration.ofSeconds(3))
+                .until(
+                        () -> {
+                            McpAsyncClient client = getMcpAsyncClient(transport);
+                            try {
+                                client.initialize().block();
+                                return client.listTools().block().tools().size();
+                            } finally {
+                                client.close();
+                            }
+                        },
+                        greaterThanOrEqualTo(2));
+
+        McpAsyncClient client = getMcpAsyncClient(transport);
+        try {
+            client.initialize().block();
+            {
+                {
+                    Map<String, Object> args = Map.of("a", "1", "b", "2");
+
+                    McpSchema.CallToolRequest request = McpSchema.CallToolRequest.builder()
+                            .name("test_add")
+                            .arguments(args)
+                            .build();
+
+                    McpSchema.CallToolResult result = client.callTool(request)
+                            .contextWrite(context -> context.put(
+                                    HEADERS_CTX_KEY, Map.of("Authorization", "really complicated password")))
+                            .block();
+                    LOGGER.debug("result: {}", result.content());
+
+                    assertThat(result.content().size(), is(1));
+                    McpSchema.Content content = result.content().get(0);
+
+                    assertThat(content, instanceOf(McpSchema.TextContent.class));
+                    McpSchema.TextContent textContent = (McpSchema.TextContent) content;
+                    assertThat(textContent.text(), containsString("Result is 3 with really complicated password"));
+                }
+
+                // clearing session
+                Field sessionsField = provider.getClass().getDeclaredField("sessions");
+                sessionsField.setAccessible(true);
+                Map<?, ?> sessionsMap = ((Map) sessionsField.get(provider));
+                sessionsMap.clear();
+                assertThat(sessionsMap.size(), is(0));
+
+                {
+                    Map<String, Object> args = Map.of("a", "1", "b", "2");
+
+                    McpSchema.CallToolRequest request = McpSchema.CallToolRequest.builder()
+                            .name("test_add")
+                            .arguments(args)
+                            .build();
+
+                    McpSchema.CallToolResult result = client.callTool(request)
+                            .contextWrite(context -> context.put(
+                                    HEADERS_CTX_KEY, Map.of("Authorization", "really complicated password")))
+                            .onErrorResume(throwable -> {
+                                // we retry once if error
+                                LOGGER.warn("error during callTool", throwable);
+                                return client.initialize()
+                                        .then(client.callTool(request)
+                                                .contextWrite(context -> context.put(
+                                                        HEADERS_CTX_KEY,
+                                                        Map.of("Authorization", "really complicated password"))));
+                            })
+                            .block();
+                    LOGGER.debug("result: {}", result.content());
+
+                    assertThat(result.content().size(), is(1));
+                    McpSchema.Content content = result.content().get(0);
+
+                    assertThat(content, instanceOf(McpSchema.TextContent.class));
+                    McpSchema.TextContent textContent = (McpSchema.TextContent) content;
+                    assertThat(textContent.text(), containsString("Result is 3 with really complicated password"));
+
+                    client.callTool(request)
+                            .contextWrite(context -> context.put(
+                                    HEADERS_CTX_KEY, Map.of("Authorization", "really complicated password")))
+                            .block();
+                    LOGGER.debug("result: {}", result.content());
+
+                    assertThat(result.content().size(), is(1));
+                    content = result.content().get(0);
+
+                    assertThat(content, instanceOf(McpSchema.TextContent.class));
+                    textContent = (McpSchema.TextContent) content;
+                    assertThat(textContent.text(), containsString("Result is 3 with really complicated password"));
+                }
             }
 
         } finally {
