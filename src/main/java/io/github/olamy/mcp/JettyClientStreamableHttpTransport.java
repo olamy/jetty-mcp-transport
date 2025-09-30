@@ -20,9 +20,11 @@
 package io.github.olamy.mcp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.common.McpTransportContext;
+import io.modelcontextprotocol.json.McpJsonMapper;
+import io.modelcontextprotocol.json.TypeRef;
+import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.DefaultMcpTransportSession;
 import io.modelcontextprotocol.spec.DefaultMcpTransportStream;
 import io.modelcontextprotocol.spec.HttpHeaders;
@@ -111,6 +113,8 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
     public static final String HEADERS_CTX_KEY =
             JettyClientStreamableHttpTransport.class.getName() + ".HEADERS_CTX_KEY";
 
+    private final McpJsonMapper mcpJsonMapper;
+
     private JettyClientStreamableHttpTransport(
             ObjectMapper objectMapper,
             HttpClient httpClient,
@@ -119,6 +123,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
             boolean openConnectionOnStartup,
             RequestCustomiser requestCustomiser) {
         this.objectMapper = objectMapper;
+
         this.httpClient = httpClient;
         this.endpoint = endpoint;
         this.resumableStreams = resumableStreams;
@@ -128,6 +133,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
         if (!this.httpClient.isStarted()) {
             throw new IllegalStateException("HttpClient is not started");
         }
+        this.mcpJsonMapper = new JacksonMcpJsonMapper(objectMapper);
     }
 
     @Override
@@ -144,6 +150,11 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
      */
     public static Builder builder(HttpClient httpClient) {
         return new Builder(httpClient);
+    }
+
+    @Override
+    public <T> T unmarshalFrom(Object data, TypeRef<T> typeRef) {
+        return mcpJsonMapper.convertValue(data, typeRef);
     }
 
     @Override
@@ -487,7 +498,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                         return null;
                     } else {
                         try {
-                            return List.of(McpSchema.deserializeJsonRpcMessage(objectMapper, message));
+                            return List.of(McpSchema.deserializeJsonRpcMessage(mcpJsonMapper, message));
                         } catch (IOException e) {
                             throw new McpTransportException("Error parsing JSON-RPC message: " + message, e);
                         }
@@ -526,16 +537,11 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
         return transportSession.sessionId().orElse(NO_SESSION_ID);
     }
 
-    @Override
-    public <T> T unmarshalFrom(Object data, TypeReference<T> typeRef) {
-        return this.objectMapper.convertValue(data, typeRef);
-    }
-
     private Tuple2<Optional<String>, Iterable<McpSchema.JSONRPCMessage>> parse(ServerSentEvent event) {
         if (MESSAGE_EVENT_TYPE.equals(event.getEvent())) {
             try {
                 McpSchema.JSONRPCMessage message =
-                        McpSchema.deserializeJsonRpcMessage(this.objectMapper, event.getData());
+                        McpSchema.deserializeJsonRpcMessage(this.mcpJsonMapper, event.getData());
                 return Tuples.of(Optional.ofNullable(event.getId()), List.of(message));
             } catch (IOException ioException) {
                 throw new McpTransportException("Error parsing JSON-RPC message: " + event.getData(), ioException);
