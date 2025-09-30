@@ -41,6 +41,7 @@ import io.modelcontextprotocol.client.McpAsyncClient;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.common.McpTransportContext;
+import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.McpClientTransport;
@@ -104,7 +105,7 @@ public class JettyClientStreamableHttpTransportTest {
         server.setHandler(context);
 
         provider = HttpServletStreamableServerTransportProvider.builder()
-                .objectMapper(OBJECT_MAPPER)
+                .jsonMapper(new JacksonMcpJsonMapper(OBJECT_MAPPER))
                 .mcpEndpoint("/mcp")
                 .contextExtractor(request -> {
                     var userId = request.getHeader("Authorization");
@@ -158,7 +159,7 @@ public class JettyClientStreamableHttpTransportTest {
                 .tool(McpSchema.Tool.builder()
                         .name("test_hellowho")
                         .description("Say hello to the world")
-                        .inputSchema("{}")
+                        .inputSchema(new JacksonMcpJsonMapper(OBJECT_MAPPER), "{}")
                         .build())
                 .callHandler((mcpSyncServerExchange, callToolRequest) -> {
                     McpTransportContext transportContext = mcpSyncServerExchange.transportContext();
@@ -173,7 +174,7 @@ public class JettyClientStreamableHttpTransportTest {
                 .tool(McpSchema.Tool.builder()
                         .name("test_add")
                         .description("Add two numbers")
-                        .inputSchema(addSchemaString())
+                        .inputSchema(new JacksonMcpJsonMapper(OBJECT_MAPPER), addSchemaString())
                         .build())
                 .callHandler((mcpSyncServerExchange, callToolRequest) -> {
                     McpTransportContext transportContext = mcpSyncServerExchange.transportContext();
@@ -234,7 +235,7 @@ public class JettyClientStreamableHttpTransportTest {
                 .requestCustomiser((body, request) -> {
                     try {
                         McpSchema.JSONRPCMessage jsonrpcMessage =
-                                McpSchema.deserializeJsonRpcMessage(OBJECT_MAPPER, body);
+                                McpSchema.deserializeJsonRpcMessage(new JacksonMcpJsonMapper(OBJECT_MAPPER), body);
                         if (jsonrpcMessage instanceof McpSchema.JSONRPCRequest jsonrpcRequest
                                 && jsonrpcRequest.params() instanceof Map params) {
                             Optional<Map<String, Object>> meta = Optional.ofNullable((Map) params.get("_meta"));
