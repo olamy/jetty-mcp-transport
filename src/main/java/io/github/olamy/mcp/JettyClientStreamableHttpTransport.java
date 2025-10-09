@@ -186,7 +186,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                             .build()
                             .response())
                     .onErrorResume(e -> {
-                        logger.warn("Got error when closing transport", e);
+                        logger.debug("Got error when closing transport", e);
                         return Mono.empty();
                     })
                     .then();
@@ -205,7 +205,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
         logger.debug("Handling exception for session {}", sessionIdOrPlaceholder(this.activeSession.get()), t);
         if (t instanceof McpTransportSessionNotFoundException) {
             McpTransportSession<?> invalidSession = this.activeSession.getAndSet(createTransportSession());
-            logger.warn("Server does not recognize session {}. Invalidating.", invalidSession.sessionId());
+            logger.info("Server does not recognize session {}. Invalidating.", invalidSession.sessionId());
             invalidSession.close();
         }
         Consumer<Throwable> handler = this.exceptionHandler.get();
@@ -251,7 +251,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                             stream.lastId().ifPresent(id -> httpFields.add(HttpHeaders.LAST_EVENT_ID, id));
                         }
                     })
-                    .onRequestFailure((request1, e) -> logger.warn("Got error when reconnect", e));
+                    .onRequestFailure((request1, e) -> logger.debug("Got error when reconnect", e));
 
             Optional<Map<String, String>> headers = ctx.getOrEmpty(HEADERS_CTX_KEY);
             headers.ifPresent(stringStringMap ->
@@ -275,7 +275,12 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                         return this.extractError(chunkPublisher, NO_SESSION_ID, reactiveResponse);
                                     }
                                 } else {
-                                    return Flux.error(new Exception());
+                                    String msg = "Opening an SSE stream failed. This can be safely ignored.";
+                                    return Mono.<McpSchema.JSONRPCMessage>error(new Exception(msg))
+                                            .doOnError(e -> {
+                                                logger.debug(msg, e);
+                                            })
+                                            .flux();
                                 }
                             }))
                     .flatMap(jsonrpcMessage -> this.handler.get().apply(Mono.just(jsonrpcMessage)))
@@ -359,7 +364,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                     // Existing SDKs consume notifications with no response body nor
                                     // content type
                                     if (contentType.isEmpty()) {
-                                        logger.trace(
+                                        logger.debug(
                                                 "Message was successfully sent via POST for session {}",
                                                 sessionRepresentation);
                                         // signal the caller that the message was successfully
@@ -375,7 +380,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                             return newEventStream(
                                                     reactiveResponse, sessionRepresentation, chunkPublisher);
                                         } else if (contentType.get().startsWith("application/json")) {
-                                            logger.trace(
+                                            logger.debug(
                                                     "Received response to POST for session {}", sessionRepresentation);
                                             sink.success();
                                             return directResponse(message, chunkPublisher);
