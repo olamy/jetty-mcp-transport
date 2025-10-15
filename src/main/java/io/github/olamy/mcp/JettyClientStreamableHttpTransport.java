@@ -364,9 +364,11 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                     // Existing SDKs consume notifications with no response body nor
                                     // content type
                                     if (contentType.isEmpty()) {
-                                        logger.debug(
-                                                "Message was successfully sent via POST for session {}",
-                                                sessionRepresentation);
+                                        if (logger.isDebugEnabled()) {
+                                            logger.debug(
+                                                    "Message was successfully sent via POST for session {}",
+                                                    sessionRepresentation);
+                                        }
                                         // signal the caller that the message was successfully
                                         // delivered
                                         sink.success();
@@ -380,8 +382,11 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                             return newEventStream(
                                                     reactiveResponse, sessionRepresentation, chunkPublisher);
                                         } else if (contentType.get().startsWith("application/json")) {
-                                            logger.debug(
-                                                    "Received response to POST for session {}", sessionRepresentation);
+                                            if (logger.isDebugEnabled()) {
+                                                logger.debug(
+                                                        "Received response to POST for session {}",
+                                                        sessionRepresentation);
+                                            }
                                             sink.success();
                                             return directResponse(message, chunkPublisher);
                                         } else {
@@ -435,7 +440,9 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
             McpTransportStream<Disposable> stream, ReactiveResponse response, Publisher<Content.Chunk> chunks) {
         McpTransportStream<Disposable> sessionStream =
                 stream != null ? stream : new DefaultMcpTransportStream<>(this.resumableStreams, this::reconnect);
-        logger.debug("Connected stream {}", sessionStream.streamId());
+        if (logger.isDebugEnabled()) {
+            logger.debug("Connected stream {}", sessionStream.streamId());
+        }
 
         Flux<ServerSentEvent> serverSentEventFlux = Flux.from(Flux.from(chunks)
                 .map(Content.Chunk::getByteBuffer)
@@ -461,8 +468,18 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                     int status = response.getStatus();
                     try {
                         String responseMessage = new String(bytes);
+                        String contentType = response.getHeaders().get(HttpHeader.CONTENT_TYPE);
                         if (logger.isDebugEnabled()) {
-                            logger.debug("extractError, status {} responseMessage: {}", status, responseMessage);
+                            logger.debug(
+                                    "extractError, status {}, content type {}, responseMessage: {}",
+                                    status,
+                                    contentType,
+                                    responseMessage);
+                        }
+                        if (!"application/json".equals(contentType)) {
+                            return Mono.error(new McpTransportException(
+                                    "Can't parse the server response  status " + status + " content type " + contentType
+                                            + " for session " + sessionRepresentation + ": " + responseMessage));
                         }
                         McpSchema.JSONRPCResponse jsonRpcResponse =
                                 objectMapper.readValue(responseMessage, McpSchema.JSONRPCResponse.class);
@@ -552,7 +569,9 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                 throw new McpTransportException("Error parsing JSON-RPC message: " + event.getData(), ioException);
             }
         } else {
-            logger.debug("Received SSE event with type: {}", event);
+            if (logger.isDebugEnabled()) {
+                logger.debug("Received SSE event with type: {}", event);
+            }
             return Tuples.of(Optional.empty(), List.of());
         }
     }
