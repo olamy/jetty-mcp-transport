@@ -476,7 +476,7 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                     contentType,
                                     responseMessage);
                         }
-                        if ("application/json".equals(contentType)) {
+                        if (!"application/json".equals(contentType)) {
                             return Mono.error(new McpTransportException(
                                     "Can't parse the server response  status " + status + " content type " + contentType
                                             + " for session " + sessionRepresentation + ": " + responseMessage));
