@@ -180,7 +180,13 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                     .headers(httpFields -> httpFields
                             .add(HttpHeaders.MCP_SESSION_ID, sessionId)
                             .add(HttpHeaders.PROTOCOL_VERSION, MCP_PROTOCOL_VERSION))
-                    .onRequestFailure((request1, e) -> logger.warn("error when creating transport session", e));
+                    .onRequestFailure((request1, e) -> {
+                        if (httpClient.isStopped() || httpClient.isStopping()) {
+                            logger.debug("error when creating transport session", e);
+                        } else {
+                            logger.warn("error when creating transport session", e);
+                        }
+                    });
             return Mono.from(ReactiveRequest.newBuilder(request)
                             .abortOnCancel(true)
                             .build()
