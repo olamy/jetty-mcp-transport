@@ -483,9 +483,10 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                     responseMessage);
                         }
                         if (!"application/json".equals(contentType)) {
-                            return Mono.error(new McpTransportException(
+                            String reason = response.getResponse() == null ? null : response.getResponse().getReason();
+                            return Mono.error(new JettyMcpTransportException(
                                     "Can't parse the server response  status " + status + " content type " + contentType
-                                            + " for session " + sessionRepresentation + ": " + responseMessage));
+                                            + " for session " + sessionRepresentation + ": " + responseMessage, status, reason));
                         }
                         McpSchema.JSONRPCResponse jsonRpcResponse =
                                 objectMapper.readValue(responseMessage, McpSchema.JSONRPCResponse.class);
