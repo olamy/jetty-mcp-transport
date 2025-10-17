@@ -472,7 +472,9 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                     buf.get(bytes);
                     Exception toPropagate;
                     int status = response.getStatus();
-                    String reason = response.getResponse() == null ? null : response.getResponse().getReason();
+                    String reason = response.getResponse() == null
+                            ? null
+                            : response.getResponse().getReason();
                     try {
                         String responseMessage = new String(bytes);
                         String contentType = response.getHeaders().get(HttpHeader.CONTENT_TYPE);
@@ -486,7 +488,10 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                         if (!"application/json".equals(contentType)) {
                             return Mono.error(new JettyMcpTransportException(
                                     "Can't parse the server response  status " + status + " content type " + contentType
-                                            + " for session " + sessionRepresentation + ": " + responseMessage, status, reason, responseMessage));
+                                            + " for session " + sessionRepresentation + ": " + responseMessage,
+                                    status,
+                                    reason,
+                                    responseMessage));
                         }
                         McpSchema.JSONRPCResponse jsonRpcResponse =
                                 objectMapper.readValue(responseMessage, McpSchema.JSONRPCResponse.class);
@@ -501,9 +506,12 @@ public class JettyClientStreamableHttpTransport implements McpClientTransport {
                                         new McpTransportSessionNotFoundException(sessionRepresentation, toPropagate));
                             }
                             return Mono.error(new JettyMcpTransportException(
-                                    "Received " + status + " BAD REQUEST for session " + sessionRepresentation + ". "
-                                            + toPropagate.getMessage(),
-                                    toPropagate).withHttpStatusCode(status).withResponseBody(responseMessage).withReasonPhrase(reason));
+                                            "Received " + status + " BAD REQUEST for session " + sessionRepresentation
+                                                    + ". " + toPropagate.getMessage(),
+                                            toPropagate)
+                                    .withHttpStatusCode(status)
+                                    .withResponseBody(responseMessage)
+                                    .withReasonPhrase(reason));
                         }
                     } catch (IOException ex) {
                         toPropagate = new McpTransportException("Sending request failed, " + ex.getMessage(), ex);
