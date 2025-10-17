@@ -63,4 +63,12 @@ public class JettyMcpTransportException extends McpTransportException {
         this.responseBody = responseBody;
         return this;
     }
+
+    @Override
+    public String toString() {
+        return super.toString() + ", {" + "httpStatusCode="
+                + httpStatusCode + ", reasonPhrase='"
+                + reasonPhrase + '\'' + ", responseBody='"
+                + responseBody + '\'' + '}';
+    }
 }
